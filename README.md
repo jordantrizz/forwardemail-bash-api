@@ -1,0 +1,1 @@
+A bash script to interact with the forwardemail.net API.

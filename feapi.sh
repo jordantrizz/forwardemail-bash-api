@@ -136,6 +136,8 @@ usage () {
 	echo "    tests						-List all test codes"
 	echo "    debug						-Debug mode"
 	echo ""
+	echo "version: $VERSION"
+	echo""
 }
 
 split_email () {

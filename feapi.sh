@@ -7,12 +7,38 @@
 # ------------
 # -- Variables
 # ------------
-VERSION="0.1.1"
+# Get version for file ~/.version
 SCRIPT_NAME=feapi
 SCRIPT=$(readlink -f "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 API_URL="https://api.forwardemail.net"
 REQUIRED_APPS=("jq" "column")
+VERSION=$(<$SCRIPTPATH/VERSION)
+
+# -- Colors
+export TERM=xterm-color
+export CLICOLOR=1
+export LSCOLORS=ExFxCxDxBxegedabagacad
+
+export NC='\e[0m' # No Color
+export CBLACK='\e[0;30m'
+export CGRAY='\e[1;30m'
+export CRED='\e[0;31m'
+export CLIGHT_RED='\e[1;31m'
+export CGREEN='\e[0;32m'
+export CLIGHT_GREEN='\e[1;32m'
+export CBROWN='\e[0;33m'
+export CYELLOW='\e[1;33m'
+export CBLUE='\e[0;34m'
+export CLIGHT_BLUE='\e[1;34m'
+export CPURPLE='\e[0;35m'
+export CLIGHT_PURPLE='\e[1;35m'
+export CCYAN='\e[0;36m'
+export CLIGHT_CYAN='\e[1;36m'
+export CLIGHT_GRAY='\e[0;37m'
+export CWHITE='\e[1;37m'
+
+# -- Check for key files
 [[ -f .test ]] && TEST=$(<$SCRIPTPATH/.test) || TEST="0"
 [[ -f .debug ]] && DEBUG=$(<$SCRIPTPATH/.debug) || DEBUG="0"
 [[ -z $DEBUG ]] && DEBUG="0"
@@ -22,15 +48,15 @@ REQUIRED_APPS=("jq" "column")
 # -- Key Functions
 # ----------------
 _debug () {
-        if [[ -f .debug ]] && (( $DEBUG >= "1" )); then
-                echo -e "${CCYAN}**** DEBUG $@${NC}"
-        fi
+    if [[ $DEBUG -ge "1" ]]; then
+		echo -e "${CCYAN}**** DEBUG $@${NC}"
+    fi
 }
 
 _debug_curl () {
-                if [[ $DEBUG == "2" ]]; then
-                        echo -e "${CCYAN}**** DEBUG $@${NC}"
-                fi
+	if [[ $DEBUG == "2" ]]; then
+    	echo -e "${CCYAN}**** DEBUG $@${NC}"
+    fi
 }
 
 
@@ -66,36 +92,6 @@ _check_commands () {
 	done
 }
 
-# -------
-# -- Init
-# -------
-#echo "-- Loading $SCRIPT_NAME - v$VERSION"
-#. $(dirname "$0")/functions.sh
-#_debug "Loading functions.sh"
-
-# -- Colors
-export TERM=xterm-color
-export CLICOLOR=1
-export LSCOLORS=ExFxCxDxBxegedabagacad
-
-export NC='\e[0m' # No Color
-export CBLACK='\e[0;30m'
-export CGRAY='\e[1;30m'
-export CRED='\e[0;31m'
-export CLIGHT_RED='\e[1;31m'
-export CGREEN='\e[0;32m'
-export CLIGHT_GREEN='\e[1;32m'
-export CBROWN='\e[0;33m'
-export CYELLOW='\e[1;33m'
-export CBLUE='\e[0;34m'
-export CLIGHT_BLUE='\e[1;34m'
-export CPURPLE='\e[0;35m'
-export CLIGHT_PURPLE='\e[1;35m'
-export CCYAN='\e[0;36m'
-export CLIGHT_CYAN='\e[1;36m'
-export CLIGHT_GRAY='\e[0;37m'
-export CWHITE='\e[1;37m'
-
 # --------
 # -- Debug
 # --------
@@ -129,15 +125,19 @@ usage () {
 	echo "Usage: $SCRIPT_NAME <list|create>"
 	echo ""
 	echo " Commands"
-	echo "    list-aliases <domain>				-List all aliases for domain"
-	echo "    view-alias <email alias>				-Retrive specific domain alias"
-	echo "    create-alias <email alias> <destination-emails>	-Creates an alias with comma separated destination emails"
-	echo "    delete-alias <email alias>				-Deletes an alias"
-	echo "    tests						-List all test codes"
-	echo "    debug						-Debug mode"
+	echo "    list-aliases <domain>                              -List all aliases for domain"
+	echo "    list-domains <domain>                              -List domains"
+	echo "    view-alias <email alias>                           -Retrive specific domain alias"
+	echo "    create-alias <email alias> <destination-emails>	 -Creates an alias with comma separated destination emails"
+	echo "    delete-alias <email alias>                         -Deletes an alias"
+	echo "    tests                                              -List all test codes"
+	echo " Options"
+	echo "    -d         -Debug mode 1 or 2"
 	echo ""
-	echo "version: $VERSION"
-	echo""
+	echo " Ensure you hav your forwardemail.net API credentials in \$HOME/.feapi in the following format"
+	echo " API_KEY=1v34b21b43234b"
+	echo ""
+        echo "Version: $VERSION"
 }
 
 split_email () {
@@ -186,9 +186,9 @@ curl_get () {
 		_debug "query: $TEST_FILE"
                 output=$TEST_FILE
         else
-                _debug "query: $QUERY api: $API_KEY"
-                _debug "cmd: curl -sX GET $CURL_QUERY -u $API_KEY:"
-                output=$(curl -sX GET $CURL_QUERY -u $API_KEY:)
+                _debug "query: $QUERY api: $FEAPI_TOKEN"
+                _debug "cmd: curl -sX GET $CURL_QUERY -u $FEAPI_TOKEN:"
+                output=$(curl -sX GET $CURL_QUERY -u $FEAPI_TOKEN:)
                 _debug_curl $output
         fi
 }
@@ -209,7 +209,7 @@ curl_post () {
 		echo ""
 		echo "sample CURL"
 		echo "-----------"
-		echo "curl -sX POST $CURL_QUERY -u $API_KEY: \\"
+		echo "curl -sX POST $CURL_QUERY -u $FEAPI_TOKEN: \\"
 		echo "-d \"name=$ALIAS\" \\"
 		echo "-d \"recipients=$EMAILS\""
 		echo "-d \"$4\""
@@ -217,21 +217,21 @@ curl_post () {
 		output=$TEST_FILE
         else
 		_debug "query: $QUERY alias:$ALIAS emails:${EMAILS[@]}"
-		_debug "cmd: curl -sX POST $CURL_QUERY -u $API_KEY: -d \"name=$ALIAS\" -d \"recipients=$EMAILS\" -d \"$ENABLED\""		
-	        output=$(curl -sX POST $CURL_QUERY -u $API_KEY: -d "name=$ALIAS" -d "recipients=$EMAILS" -d "$ENABLED")
-	        _debug_curl $output
+		_debug "cmd: curl -sX POST $CURL_QUERY -u $FEAPI_TOKEN: -d \"name=$ALIAS\" -d \"recipients=$EMAILS\" -d \"$ENABLED\""		
+        output=$(curl -sX POST $CURL_QUERY -u $FEAPI_TOKEN: -d "name=$ALIAS" -d "recipients=$EMAILS" -d "$ENABLED")
+        _debug_curl $output
         fi
 
 	_debug "output"
 	_debug "------"
 	_debug $output
 	
-        if [[ $output == *"Bad Request"* ]]; then
-        	_debug "curl error"
-		curl_error $output
+    if [[ $output == *"Bad Request"* ]]; then
+        _debug "curl error"
+        curl_error_message $output
 	else
-        	_debug "curl success"
-                _success "Query success"
+        _debug "curl success"
+        _success "Query success"
 
         fi
 
@@ -247,12 +247,26 @@ curl_delete () {
                 _debug "query: $TEST_FILE"
                 output=$TEST_FILE
         else
-                _debug "query: $QUERY api: $API_KEY"
-                _debug "cmd: curl -sX DELETE $CURL_QUERY -u $API_KEY:"
-                output=$(curl -sX DELETE $CURL_QUERY -u $API_KEY:)
+                _debug "query: $QUERY api: $FEAPI_TOKEN"
+                _debug "cmd: curl -sX DELETE $CURL_QUERY -u $FEAPI_TOKEN:"
+                output=$(curl -sX DELETE $CURL_QUERY -u $FEAPI_TOKEN:)
                 _debug_curl $output
         fi        
 	curl_check
+}
+
+list_domains () {
+	#GET /v1/domains
+	#Querystring Parameter	Required	Type	Description
+	#name	No	String (RegExp supported)	Search for domains by name
+	#alias	No	String (RegExp supported)	Search for domains by alias name
+	#recipient	No	String (RegExp supported)	Search for domains by recipient
+	# List aliases
+    echo "-- Listing domains"
+    curl_get "/v1/domains"
+    echo "Domains"
+    echo "-------------------"
+    echo ${output[@]} | jq -r '(["ID","DOMAIN","MX","TXT","ALIASES","CREATED","LINK"] | (., map(length*"-"))), (.[] | [.id, .name, .has_mx_record, .has_txt_record, .members[0] .alias_count, .created_at, .link])|@tsv' | column -t
 }
 
 list_aliases () {
@@ -262,7 +276,6 @@ list_aliases () {
 	#recipient		No		String (RegExp supported)	Search for aliases in a domain by recipient	
 
 	# Variables
-	_debug "args: $@"
 	DOMAIN=$1
 	_debug "domain = $DOMAIN"
 	
@@ -279,8 +292,6 @@ view_alias () {
         # GET /v1/domains/:domain_name/aliases/:alias_id
         # curl https://api.forwardemail.net/v1/domains/:domain_name/aliases/:alias_id -u API_TOKEN:
 
-        # Variables
-        _debug "args: $@"
         # Split email parts
         _debug "splitting email"
         split_email $@
@@ -324,7 +335,6 @@ delete_alias () {
 	#curl -X DELETE https://api.forwardemail.net/v1/domains/:domain_name/aliases/:alias_id
 
         # Variables
-        _debug "args: $@"
         split_email $1
         _debug "alias: $ALIAS domain: $DOMAIN"
 
@@ -367,29 +377,56 @@ debug_cmd () {
 # -- Main script
 # --------------
 
+# -- options
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+key="$1"
+
+case $key in
+    -d|--debug)
+    DEBUG="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    *)# unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    shift # past argument
+    ;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+# -- debug args
+_debug "ARGS: $@"
+
+# -- check if required commands are installed
 _check_commands
 
-args=$@
+# -- Check for .feapi key
+if [[ -f ~/.feapi ]]; then
+	_success "Found ~/.feapi"
+    source ~/.feapi
+elif [[ $FEAPI_TOKEN ]]; then
+        _success "Found API key."
+else
+    _error "No ~/.feapi file exists, and $FEAPI_TOKEN set."
+    exit 1
+fi
+
+# -- Loop through args
 if [ ! $1 ]; then
         usage
         exit
-fi
-
-if [[ -f ~/.feapi ]]; then
-	_success "Found ~/.feapi"
-        source ~/.feapi
-        if [[ $API_KEY ]]; then
-        	_success "Found API key."
-        else
-        	_error "No API key found."
-        fi
-else
-	_error "No ~/.feapi file exists, no token."
-fi
-
-if [[ $1 == "list-aliases" ]]; then
-	if [[ ! -n $2 ]];then usage;exit;fi
-	list_aliases $2
+elif [[ $1 == "list-aliases" ]]; then
+	if [[ ! -n $2 ]];then 
+		usage
+		exit 1
+	else
+		list_aliases $2
+	fi
+elif [[ $1 == "list-domains" ]]; then
+	list_domains	
 elif [[ $1 == "view-alias" ]]; then
 	if [[ ! -n $2 ]];then usage;exit;fi
 	view_alias $2

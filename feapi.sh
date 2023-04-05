@@ -184,9 +184,9 @@ curl_get () {
 		_debug "query: $TEST_FILE"
                 output=$TEST_FILE
         else
-                _debug "query: $QUERY api: $API_KEY"
-                _debug "cmd: curl -sX GET $CURL_QUERY -u $API_KEY:"
-                output=$(curl -sX GET $CURL_QUERY -u $API_KEY:)
+                _debug "query: $QUERY api: $FEAPI_TOKEN"
+                _debug "cmd: curl -sX GET $CURL_QUERY -u $FEAPI_TOKEN:"
+                output=$(curl -sX GET $CURL_QUERY -u $FEAPI_TOKEN:)
                 _debug_curl $output
         fi
 }
@@ -207,7 +207,7 @@ curl_post () {
 		echo ""
 		echo "sample CURL"
 		echo "-----------"
-		echo "curl -sX POST $CURL_QUERY -u $API_KEY: \\"
+		echo "curl -sX POST $CURL_QUERY -u $FEAPI_TOKEN: \\"
 		echo "-d \"name=$ALIAS\" \\"
 		echo "-d \"recipients=$EMAILS\""
 		echo "-d \"$4\""
@@ -215,21 +215,21 @@ curl_post () {
 		output=$TEST_FILE
         else
 		_debug "query: $QUERY alias:$ALIAS emails:${EMAILS[@]}"
-		_debug "cmd: curl -sX POST $CURL_QUERY -u $API_KEY: -d \"name=$ALIAS\" -d \"recipients=$EMAILS\" -d \"$ENABLED\""		
-	        output=$(curl -sX POST $CURL_QUERY -u $API_KEY: -d "name=$ALIAS" -d "recipients=$EMAILS" -d "$ENABLED")
-	        _debug_curl $output
+		_debug "cmd: curl -sX POST $CURL_QUERY -u $FEAPI_TOKEN: -d \"name=$ALIAS\" -d \"recipients=$EMAILS\" -d \"$ENABLED\""		
+        output=$(curl -sX POST $CURL_QUERY -u $FEAPI_TOKEN: -d "name=$ALIAS" -d "recipients=$EMAILS" -d "$ENABLED")
+        _debug_curl $output
         fi
 
 	_debug "output"
 	_debug "------"
 	_debug $output
 	
-        if [[ $output == *"Bad Request"* ]]; then
-        	_debug "curl error"
-		curl_error $output
+    if [[ $output == *"Bad Request"* ]]; then
+        _debug "curl error"
+        curl_error $output
 	else
-        	_debug "curl success"
-                _success "Query success"
+        _debug "curl success"
+        _success "Query success"
 
         fi
 
@@ -245,9 +245,9 @@ curl_delete () {
                 _debug "query: $TEST_FILE"
                 output=$TEST_FILE
         else
-                _debug "query: $QUERY api: $API_KEY"
-                _debug "cmd: curl -sX DELETE $CURL_QUERY -u $API_KEY:"
-                output=$(curl -sX DELETE $CURL_QUERY -u $API_KEY:)
+                _debug "query: $QUERY api: $FEAPI_TOKEN"
+                _debug "cmd: curl -sX DELETE $CURL_QUERY -u $FEAPI_TOKEN:"
+                output=$(curl -sX DELETE $CURL_QUERY -u $FEAPI_TOKEN:)
                 _debug_curl $output
         fi        
 	curl_check
@@ -405,13 +405,11 @@ _check_commands
 if [[ -f ~/.feapi ]]; then
 	_success "Found ~/.feapi"
     source ~/.feapi
-    if [[ $API_KEY ]]; then
-    	_success "Found API key."
-    else
-    	_error "No API key found."
-    fi
+elif [[ $FEAPI_TOKEN ]]; then
+        _success "Found API key."
 else
-    _error "No ~/.feapi file exists, no token."
+    _error "No ~/.feapi file exists, and $FEAPI_TOKEN set."
+    exit 1
 fi
 
 # -- Loop through args
@@ -419,8 +417,12 @@ if [ ! $1 ]; then
         usage
         exit
 elif [[ $1 == "list-aliases" ]]; then
-	if [[ ! -n $2 ]];then usage;exit;fi
-	list_aliases $2
+	if [[ ! -n $2 ]];then 
+		usage
+		exit 1
+	else
+		list_aliases $2
+	fi
 elif [[ $1 == "list-domains" ]]; then
 	list_domains	
 elif [[ $1 == "view-alias" ]]; then

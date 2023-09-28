@@ -226,7 +226,7 @@ curl_post () {
 	
     if [[ $output == *"Bad Request"* ]]; then
         _debug "curl error"
-        curl_error $output
+        curl_error_message $output
 	else
         _debug "curl success"
         _success "Query success"

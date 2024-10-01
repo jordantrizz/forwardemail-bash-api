@@ -7,10 +7,10 @@
 # ------------
 # -- Variables
 # ------------
-VERSION="0.1.1"
 SCRIPT_NAME=feapi
 SCRIPT=$(readlink -f "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
+VERSION="$SCRIPTPATH/VERSION"
 API_URL="https://api.forwardemail.net"
 REQUIRED_APPS=("jq" "column")
 
@@ -19,23 +19,13 @@ export TERM=xterm-color
 export CLICOLOR=1
 export LSCOLORS=ExFxCxDxBxegedabagacad
 
-export NC='\e[0m' # No Color
-export CBLACK='\e[0;30m'
-export CGRAY='\e[1;30m'
-export CRED='\e[0;31m'
-export CLIGHT_RED='\e[1;31m'
-export CGREEN='\e[0;32m'
-export CLIGHT_GREEN='\e[1;32m'
-export CBROWN='\e[0;33m'
-export CYELLOW='\e[1;33m'
-export CBLUE='\e[0;34m'
-export CLIGHT_BLUE='\e[1;34m'
-export CPURPLE='\e[0;35m'
-export CLIGHT_PURPLE='\e[1;35m'
-export CCYAN='\e[0;36m'
-export CLIGHT_CYAN='\e[1;36m'
-export CLIGHT_GRAY='\e[0;37m'
-export CWHITE='\e[1;37m'
+NC='\e[0m' # No Color
+CRED='\e[0;31m'
+CGREEN='\e[0;32m'
+CCYAN='\e[0;36m'
+CLIGHT_CYAN='\e[1;36m'
+BGYELLOW='\e[43m'
+CBLACK='\e[30m'
 
 # -- Check for key files
 [[ -f .test ]] && TEST=$(<$SCRIPTPATH/.test) || TEST="0"
@@ -48,34 +38,31 @@ export CWHITE='\e[1;37m'
 # ----------------
 _debug () {
     if [[ $DEBUG -ge "1" ]]; then
-		echo -e "${CCYAN}**** DEBUG $@${NC}"
+        echo -e "${CCYAN}**** DEBUG ${*}${NC}"
     fi
 }
 
 _debug_curl () {
-	if [[ $DEBUG == "2" ]]; then
-    	echo -e "${CCYAN}**** DEBUG $@${NC}"
+	if [[ $DEBUG -ge "2" ]]; then
+    	echo -e "${CCYAN}**** DEBUG ${*}${NC}"
     fi
 }
 
 
 _debug_all () {
-        _debug "--------------------------"
-        _debug "arguments - $@"
-        _debug "funcname - ${FUNCNAME[@]}"
-        _debug "basename - $SCRIPTPATH"
-        _debug "sourced files - ${BASH_SOURCE[@]}"
-        _debug "test - $TEST"
-        _debug "--------------------------"
+    _debug "--------------------------"
+    _debug "arguments - ${*}"
+    _debug "funcname - ${FUNCNAME[*]}"
+    _debug "basename - $SCRIPTPATH"
+    _debug "sourced files - ${BASH_SOURCE[*]}"
+    _debug "test - $TEST"
+    _debug "--------------------------"
 }
 
-_error () {
-        echo -e "${CRED}$@${NC}";
-}
-
-_success () {
-        echo -e "${CGREEN}$@${NC}";
-}
+_error () { echo -e "${CRED}${*}${NC}"; }
+_success () { echo -e "${CGREEN}${*}${NC}"; }
+_loading () { echo -e "${BGYELLOW}${CBLACK}${*}${NC}"; }
+_loading2 () { echo -e "${CLIGHT_CYAN}${*}${NC}"; }
 
 _command () {
 	if ! command -v $1 &> /dev/null
@@ -86,15 +73,17 @@ _command () {
 }
 
 _check_commands () {
-	for cmd in ${REQUIRED_APPS[@]}; do
-		_command $cmd		
+    _debug "Checking for required commands"
+	for cmd in "${REQUIRED_APPS[@]}"; do
+        _debug "Checking for $cmd"
+		_command "$cmd"	
 	done
 }
 
-# --------
+# =================================================================================================
 # -- Debug
-# --------
-_debug_all $@
+# =================================================================================================
+_debug_all "${*}"
 
 if [[ $TEST == "1" ]]; then
         _debug "Testing get using .test_get file"
@@ -115,31 +104,41 @@ else
         _debug "Testing mode off -- .test=$TEST"
 fi
 
-# ------------
+# =================================================================================================
 # -- Functions
-# ------------
+# =================================================================================================
 
+# ===============================================
 # -- usage
+# ===============================================
 usage () {
-	echo "Usage: $SCRIPT_NAME <list|create>"
-	echo ""
+	echo "Usage: $SCRIPT_NAME <commands> <args>|<options>"
+	echo 
 	echo " Commands"
-	echo "    list-aliases <domain>                              -List all aliases for domain"
-	echo "    list-domains <domain>                              -List domains"
-	echo "    view-alias <email alias>                           -Retrive specific domain alias"
-	echo "    create-alias <email alias> <destination-emails>	 -Creates an alias with comma separated destination emails"
-	echo "    delete-alias <email alias>                         -Deletes an alias"
-	echo "    tests                                              -List all test codes"
-	echo " Options"
-	echo "    -d         -Debug mode 1 or 2"
-	echo ""
+    echo " --------"
+    echo " -la, --list-aliases <domain>                               List aliases for a domain"
+    echo " -ld, --list-domains <domain>                               List domains"
+    echo " -va, --view-alias <alias@domain>                           View alias"
+    echo " -ca, --create-alias <alias@domain> <email1,email2,email3>  Create alias"
+    echo " -da, --delete-alias <alias@domain>                         Delete alias"
+    echo " -t, --tests <test>                                         Run tests"
+    echo
+    echo " Options"
+    echo " -------"
+    echo " -d, --debug <debug>                                        Debug mode"
+	echo 
 	echo " Ensure you hav your forwardemail.net API credentials in \$HOME/.feapi in the following format"
 	echo " API_KEY=1v34b21b43234b"
-	echo ""
+        echo 
+	echo "Version: $(<$VERSION)"
 }
 
+# ===============================================
+# -- split_email - Split email into alias/domain
+# -- $1 = email
+# ===============================================
 split_email () {
-	email=$@
+	email="$@"
 	IFS=$'@' 
 	email=($email)
 	unset IFS
@@ -147,8 +146,12 @@ split_email () {
         DOMAIN=${email[1]}
 }
 
+# ===============================================
+# -- curl_error_message - Print error message
+# -- $1 = OUTPUT
+# ===============================================
 curl_error_message () {
-        status=$(echo $@ | jq -r '[.message, .statusCode] | @tsv')
+        status=$(echo "$@" | jq -r '[.message, .statusCode] | @tsv')
         IFS=$'\t'
         status=($status)
         QUERY_MESSAGE=${status[0]}
@@ -161,19 +164,26 @@ curl_error_message () {
         exit
 }
 
+# ===============================================
+# -- curl_check - Check for curl errors
+# ===============================================
 curl_check () {
-        if [[ $output == *"Bad Request"* ]]; then
+        if [[ $OUTPUT == *"Bad Request"* ]]; then
                 _debug "curl error"
-                curl_error_message $output
-        elif [[ $output == *"Not Found"* ]]; then
+                curl_error_message $OUTPUT
+        elif [[ $OUTPUT == *"Not Found"* ]]; then
                 _debug "curl error"
-                curl_error_message $output
+                curl_error_message $OUTPUT
         else
                 _debug "curl success"
                 _success "Query success"
         fi
 }
-                         
+
+# ===============================================
+# -- curl_get - Get data from API
+# -- $1 = query
+# ===============================================
 curl_get () {
 	QUERY=$1
 	CURL_QUERY="$API_URL$QUERY"
@@ -182,15 +192,104 @@ curl_get () {
 
         if (( $TEST >= "1" )); then
 		_debug "query: $TEST_FILE"
-                output=$TEST_FILE
+                OUTPUT=$TEST_FILE
         else
                 _debug "query: $QUERY api: $FEAPI_TOKEN"
                 _debug "cmd: curl -sX GET $CURL_QUERY -u $FEAPI_TOKEN:"
-                output=$(curl -sX GET $CURL_QUERY -u $FEAPI_TOKEN:)
-                _debug_curl $output
+
+                # Create a temporary file to store headers
+                HEADER_FILE=$(mktemp)
+
+                # Perform the curl request and store headers in the temporary file
+                OUTPUT=$(curl -sX GET $CURL_QUERY -u $FEAPI_TOKEN: -D $HEADER_FILE)
+                CURL_EXIT_CODE=$?                
+                _debug "curl exit code: $CURL_EXIT_CODE"
+                
+                # Extract the X-Page-Count header
+                X_PAGE_COUNT=$(grep -i 'X-Page-Count' $HEADER_FILE | awk '{print $2}')
+                X_PAGE_CURRENT=$(grep -i 'X-Page-Current' $HEADER_FILE | awk '{print $2}')
+                X_PAGE_SIZE=$(grep -i 'X-Page-Size' $HEADER_FILE | awk '{print $2}')
+                X_ITEM_COUNT=$(grep -i 'X-Item-Count' $HEADER_FILE | awk '{print $2}')
+                _debug "X-Page-Count: $X_PAGE_COUNT"
+                _debug "X-Page-Current: $X_PAGE_CURRENT"
+                _debug "X-Page-Size: $X_PAGE_SIZE"
+                _debug "X-Item-Count: $X_ITEM_COUNT"
+
+                # Check statusCode json
+                curl_check "$OUTPUT"
+                _debug_curl "$OUTPUT"
         fi
 }
 
+# ===============================================
+# -- curl_get_paged - Get data from API with pagination
+# -- $1 = query
+# ===============================================
+curl_get_paged () {
+    QUERY=$1
+    CURL_QUERY="$API_URL$QUERY?paginate=true"
+    local DFUNC="curl_get_paged"
+    _debug "$DFUNC: \$QUERY=$QUERY \$CURL_QUERY=$CURL_QUERY"
+
+    if (( $TEST >= "1" )); then
+        _debug "$DFUNC: Running test query"
+        OUTPUT=$TEST_FILE
+    else
+        _debug "$DFUNC: Running live"
+        
+        # Initialize an empty array to hold the combined results
+        COMBINED_RESULTS=()
+        
+        # Initialize page counter
+        PAGE=1
+        
+        while true; do
+            # Perform the curl request and store the output (headers + body) in a variable            
+            HEADER_FILE=$(mktemp)
+            _debug "$DFUNC: cmd=curl -sX GET $CURL_QUERY -u $FEAPI_TOKEN: -D $HEADER_FILE"            
+            RESPONSE=$(curl -sX GET "$CURL_QUERY&page=$PAGE" -u $FEAPI_TOKEN: -D $HEADER_FILE)
+            CURL_EXIT_CODE=$?
+            _debug "$DFUNC: Page $PAGE: ${#RESPONSE} bytes"
+            _debug "$DFUNC: curl exit code: $CURL_EXIT_CODE"
+            
+            # Extract the X-Page-Count header
+            X_PAGE_COUNT=$(grep -i 'X-Page-Count' $HEADER_FILE | awk '{print $2}' | tr -d '\r')
+            X_PAGE_CURRENT=$(grep -i 'X-Page-Current' $HEADER_FILE | awk '{print $2}' | tr -d '\r')
+            X_PAGE_SIZE=$(grep -i 'X-Page-Size' $HEADER_FILE | awk '{print $2}' | tr -d '\r')
+            X_ITEM_COUNT=$(grep -i 'X-Item-Count' $HEADER_FILE | awk '{print $2}' | tr -d '\r')
+
+            _debug "X-Page-Count: $X_PAGE_COUNT X-Page-Current: $X_PAGE_CURRENT X-Page-Size: $X_PAGE_SIZE X-Item-Count: $X_ITEM_COUNT"
+            
+            # Append the current page's results to the combined results            
+            COMBINED_RESULTS+=("$RESPONSE")
+            _debug_curl "$DFUNC: Combined results: ${COMBINED_RESULTS[*]}"
+            
+            # Check if there are more pages
+            if [[ $PAGE -eq $X_PAGE_COUNT ]]; then
+                _debug "$DFUNC: Last page reached"
+                break
+            fi
+
+            # Increment the page counter
+            PAGE=$((PAGE + 1))
+        done
+        
+        # Combine all JSON results into a single JSON array
+        OUTPUT=$(echo "${COMBINED_RESULTS[@]}" | jq -s '. | add')
+        
+        # Check statusCode json
+        curl_check "$OUTPUT"
+        _debug_curl "$OUTPUT"
+    fi
+}
+
+# ===============================================
+# -- curl_post - Post data to API
+# -- $1 = query
+# -- $2 = alias
+# -- $3 = emails
+# -- $4 = enabled
+# ===============================================
 curl_post () {
 	QUERY=$1
 	ALIAS=$2	
@@ -212,21 +311,21 @@ curl_post () {
 		echo "-d \"recipients=$EMAILS\""
 		echo "-d \"$4\""
 		echo ""
-		output=$TEST_FILE
+		OUTPUT=$TEST_FILE
         else
-		_debug "query: $QUERY alias:$ALIAS emails:${EMAILS[@]}"
+		_debug "query: $QUERY alias:$ALIAS emails:${EMAILS} enabled:$ENABLED api: $FEAPI_TOKEN"
 		_debug "cmd: curl -sX POST $CURL_QUERY -u $FEAPI_TOKEN: -d \"name=$ALIAS\" -d \"recipients=$EMAILS\" -d \"$ENABLED\""		
-        output=$(curl -sX POST $CURL_QUERY -u $FEAPI_TOKEN: -d "name=$ALIAS" -d "recipients=$EMAILS" -d "$ENABLED")
-        _debug_curl $output
+        OUTPUT=$(curl -sX POST $CURL_QUERY -u $FEAPI_TOKEN: -d "name=$ALIAS" -d "recipients=$EMAILS" -d "$ENABLED")
+        _debug_curl $OUTPUT
         fi
 
-	_debug "output"
+	_debug "OUTPUT"
 	_debug "------"
-	_debug $output
+	_debug $OUTPUT
 	
-    if [[ $output == *"Bad Request"* ]]; then
+    if [[ $OUTPUT == *"Bad Request"* ]]; then
         _debug "curl error"
-        curl_error_message $output
+        curl_error_message $OUTPUT
 	else
         _debug "curl success"
         _success "Query success"
@@ -235,6 +334,10 @@ curl_post () {
 
 }
 
+# ===============================================
+# -- curl_delete - Delete data from API
+# -- $1 = query
+# ===============================================
 curl_delete () {
         QUERY=$1
         CURL_QUERY="$API_URL$QUERY"
@@ -243,12 +346,12 @@ curl_delete () {
 
         if (( $TEST >= "1" )); then
                 _debug "query: $TEST_FILE"
-                output=$TEST_FILE
+                OUTPUT=$TEST_FILE
         else
                 _debug "query: $QUERY api: $FEAPI_TOKEN"
                 _debug "cmd: curl -sX DELETE $CURL_QUERY -u $FEAPI_TOKEN:"
-                output=$(curl -sX DELETE $CURL_QUERY -u $FEAPI_TOKEN:)
-                _debug_curl $output
+                OUTPUT=$(curl -sX DELETE $CURL_QUERY -u $FEAPI_TOKEN:)
+                _debug_curl $OUTPUT
         fi        
 	curl_check
 }
@@ -260,11 +363,11 @@ list_domains () {
 	#alias	No	String (RegExp supported)	Search for domains by alias name
 	#recipient	No	String (RegExp supported)	Search for domains by recipient
 	# List aliases
-    echo "-- Listing domains"
-    curl_get "/v1/domains"
-    echo "Domains"
+    _loading "-- Listing domains"
+    curl_get_paged "/v1/domains"
+    _loading2 "Domains"
     echo "-------------------"
-    echo ${output[@]} | jq -r '(["ID","DOMAIN","MX","TXT","ALIASES","CREATED","LINK"] | (., map(length*"-"))), (.[] | [.id, .name, .has_mx_record, .has_txt_record, .members[0] .alias_count, .created_at, .link])|@tsv' | column -t
+    echo "${OUTPUT[@]}" | jq -r '(["ID","DOMAIN","MX","TXT","ALIASES","CREATED","LINK"] | (., map(length*"-"))), (.[] | [.id, .name, .has_mx_record, .has_txt_record, .members[0] .alias_count, .created_at, .link])|@tsv' | column -t
 }
 
 list_aliases () {
@@ -278,12 +381,11 @@ list_aliases () {
 	_debug "domain = $DOMAIN"
 	
 	# List aliases
-	echo "-- Listing aliases"
-	curl_get "/v1/domains/$DOMAIN/aliases"
-	echo "Aliases for $DOMAIN"
+	_loading  "-- Listing aliases"
+	curl_get_paged "/v1/domains/$DOMAIN/aliases"    
+    _loading2 "Aliases for $DOMAIN"
 	echo "-------------------"
-	echo ${output[@]} | jq -r '(["ID","ENABLED","NAME","RECIPIENTS","DESCRIPTION"] | (., map(length*"-"))), (.[]| [.id, .is_enabled, .name,(.recipients|join(",")),.description])|@tsv' | column -t
-	
+    echo "${OUTPUT[@]}" | jq -r '(["ID","ENABLED","NAME","RECIPIENTS","DESCRIPTION"] | (., map(length*"-"))), (.[]| [.id, .is_enabled, .name,(.recipients|join(",")),.description])|@tsv' | column -t
 }
 
 view_alias () {
@@ -292,15 +394,15 @@ view_alias () {
 
         # Split email parts
         _debug "splitting email"
-        split_email $@
+        split_email "$@"
         _debug "alias: $ALIAS domain: $DOMAIN"
 
         # Get data and print
-        echo "-- Getting alias $@"
-        curl_get "/v1/domains/$DOMAIN/aliases/$ALIAS"
-        echo "Alias $@"
+        echo "-- Getting alias ${*}"
+        curl_get_paged "/v1/domains/$DOMAIN/aliases/$ALIAS"
+        echo "Alias ${*}"
         echo "-----------"
-        echo ${output[@]} | jq -r '(["ID","ENABLED","NAME","RECIPIENTS","DESCRIPTION"] | (., map(length*"-"))), [.id, .is_enabled, .name,(.recipients|join(",")),.description]|@tsv' | column -t
+        echo "${OUTPUT[@]}" | jq -r '(["ID","ENABLED","NAME","RECIPIENTS","DESCRIPTION"] | (., map(length*"-"))), [.id, .is_enabled, .name,(.recipients|join(",")),.description]|@tsv' | column -t
 }
 
 create_alias () {
@@ -316,7 +418,7 @@ create_alias () {
 	#						nowhere but return successful status codes)
 
 	# Variables
-	_debug "args: $@"
+	_debug "args: ${*}"
         split_email $1
         EMAILS=$2
         _debug "alias: $ALIAS domain: $DOMAIN emails:$EMAILS"
@@ -324,7 +426,7 @@ create_alias () {
 	# Create alias
         echo "-- Creating alias"
         curl_post "/v1/domains/$DOMAIN/aliases" "$ALIAS" "$EMAILS" "is_enabled=true"
-        echo ${output[@]} | jq -r '(["ID","ENABLED","NAME","RECIPIENTS"] | (., map(length*"-"))), [.id, .is_enabled, .name,(.recipients|join(","))]|@tsv' | column -t
+        echo "${OUTPUT[@]}" | jq -r '(["ID","ENABLED","NAME","RECIPIENTS"] | (., map(length*"-"))), [.id, .is_enabled, .name,(.recipients|join(","))]|@tsv' | column -t
 }
 
 delete_alias () {
@@ -339,7 +441,7 @@ delete_alias () {
         # Create alias
         echo "-- Creating alias"
         curl_delete "/v1/domains/$DOMAIN/aliases/$ALIAS"
-        echo ${output[@]} | jq -r '(["ID","ENABLED","NAME","RECIPIENTS","DESCRIPTION"] | (., map(length*"-"))), ([.id, .is_enabled, .name,(.recipients|join(",")),.description])|@tsv' | column -t
+        echo "${OUTPUT[@]}" | jq -r '(["ID","ENABLED","NAME","RECIPIENTS","DESCRIPTION"] | (., map(length*"-"))), ([.id, .is_enabled, .name,(.recipients|join(",")),.description])|@tsv' | column -t
 }
 
 tests_cmd () {
@@ -371,32 +473,69 @@ debug_cmd () {
         fi
 }
 
-# --------------
+# =================================================================================================
 # -- Main script
-# --------------
+# =================================================================================================
+
+# -- debug args
+ALL_ARGS="${*}"
 
 # -- options
 POSITIONAL=()
-while [[ $# -gt 0 ]]
-do
-key="$1"
+while [[ $# -gt 0 ]]; do
+    key="$1"
 
-case $key in
-    -d|--debug)
-    DEBUG="$2"
-    shift # past argument
-    shift # past value
-    ;;
-    *)# unknown option
-    POSITIONAL+=("$1") # save it in an array for later
-    shift # past argument
-    ;;
-esac
+    case $key in
+        -la|--list-aliases)
+        MODE="list-aliases"
+        LIST_ALIASES="$2"
+        shift # past argument
+        shift # past value
+        ;;
+        -ld|--list-domains)
+        MODE="list-domains"
+        LIST_DOMAINS="$2"
+        shift # past argument
+        shift # past value
+        ;;
+        -va|--view-alias)
+        MODE="view-alias"
+        VIEW_ALIAS="$2"
+        shift # past argument
+        ;;
+        -ca|--create-alias)
+        MODE="create-alias"
+        CREATE_ALIAS="$2"
+        shift # past argument
+        shift # past value
+        ;;
+        -da|--delete-alias)
+        MODE="delete-alias"
+        DELETE_ALIAS="$2"
+        shift # past argument
+        shift # past value
+        ;;
+        -t|--tests)
+        MODE="tests"
+        TESTS="$2"
+        shift # past argument
+        ;;
+        -d|--debug)
+        DEBUG="$2"
+        shift # past argument
+        shift # past value
+        ;;
+        *)# unknown option
+        POSITIONAL+=("$1") # save it in an array for later
+        shift # past argument
+        ;;
+    esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
 # -- debug args
-_debug "ARGS: $@"
+_debug "ARGS: ${ALL_ARGS}"
+_debug "MODE: ${MODE}"
 
 # -- check if required commands are installed
 _check_commands
@@ -412,32 +551,61 @@ else
     exit 1
 fi
 
-# -- Loop through args
-if [ ! $1 ]; then
+# -- list-aliases
+if [[ $MODE == "list-aliases" ]]; then
+    _debug "list-aliases args: ${LIST_ALIASES}"
+    if [[ -z $LIST_ALIASES ]]; then        
         usage
-        exit
-elif [[ $1 == "list-aliases" ]]; then
-	if [[ ! -n $2 ]];then 
-		usage
-		exit 1
-	else
-		list_aliases $2
-	fi
-elif [[ $1 == "list-domains" ]]; then
-	list_domains	
-elif [[ $1 == "view-alias" ]]; then
-	if [[ ! -n $2 ]];then usage;exit;fi
-	view_alias $2
-elif [[ $1 == 'create-alias' ]]; then
-	if [[ ! -n $2 ]] || [[ ! -n $3 ]]; then usage; exit;fi
-	create_alias $2 $3
-elif [[ $1 == 'delete-alias' ]]; then
-        if [[ ! -n $2 ]]; then usage; exit;fi
-        delete_alias $2
-elif [[ $1 == "tests" ]]; then
-	tests_cmd $2
-elif [[ $1 == "debug" ]]; then
-        debug_cmd $2
+        _error "No domain specified"
+        exit 1
+    else
+        list_aliases "$LIST_ALIASES"
+    fi
+# -- list-domains
+elif [[ $MODE == "list-domains" ]]; then
+    _debug "list-domains args: ${LIST_DOMAINS}"
+    if [[ -z $LIST_DOMAINS ]]; then
+        usage
+        _error "No domain specified"
+        exit 1
+    else
+        list_domains "$LIST_DOMAINS"
+    fi
+# -- view-alias
+elif [[ $MODE == "view-alias" ]]; then
+    _debug "view-alias args: ${VIEW_ALIAS}"
+    if [[ -z $VIEW_ALIAS ]]; then        
+        usage
+        _error "No alias specified"
+        exit 1
+    else
+        view_alias "$VIEW_ALIAS"
+    fi
+# -- create-alias
+elif [[ $MODE == "create-alias" ]]; then
+    _debug "create-alias args: ${CREATE_ALIAS}"
+    if [[ -z $CREATE_ALIAS ]]; then
+        usage
+        _error "No alias specified"
+        exit 1
+    else
+        create_alias $CREATE_ALIAS
+    fi
+# -- delete-alias
+elif [[ $MODE == "delete-alias" ]]; then
+    _debug "delete-alias args: ${DELETE_ALIAS}"
+    if [[ -z $DELETE_ALIAS ]];then
+        usage
+        _error "No alias specified"
+        exit 1
+    else
+        delete_alias $DELETE_ALIAS
+    fi
+# -- tests
+elif [[ $MODE == "tests" ]]; then
+    _debug "tests args: ${TESTS}"
+    tests_cmd "$TESTS"
 else
-	usage
+    usage
+    _error "Invalid command ${*}"
 fi
